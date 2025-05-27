@@ -6,17 +6,36 @@ import uuid
 # Application Title
 st.title("Assistente Veterinário PredictVet")
 
-# API Endpoint
-API_URL = "http://localhost:8000/run"
+# Constants
+ADK_BASE_URL = "http://localhost:8000"
+APP_NAME = "PredictVet"
 USER_ID = "streamlit_user"
+# API_URL = "http://localhost:8000/run" # Old API URL, commented out
 
 # Initialize chat history in session state if it doesn't exist
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Initialize sessionId if it doesn't exist
-if "sessionId" not in st.session_state:
-    st.session_state.sessionId = str(uuid.uuid4())
+# Initialize ADK session ID if it doesn't exist
+if "adk_session_id" not in st.session_state:
+    st.session_state.adk_session_id = str(uuid.uuid4())
+
+# One-time session creation/activation with ADK
+if "session_initialized" not in st.session_state:
+    try:
+        session_creation_url = f"{ADK_BASE_URL}/apps/{APP_NAME}/users/{USER_ID}/sessions/{st.session_state.adk_session_id}"
+        response = requests.post(session_creation_url, json={})
+        response.raise_for_status()  # Check for HTTP errors
+        st.session_state.session_initialized = True
+        # Optional: st.toast("Session initialized successfully!") # For debugging
+    except requests.exceptions.RequestException as e:
+        error_msg = f"Falha ao inicializar a sessão com o agente ADK: {e}"
+        st.error(error_msg)
+        st.session_state.messages.append({"role": "assistant", "content": error_msg})
+    except Exception as e:
+        error_msg = f"Ocorreu um erro inesperado durante a inicialização da sessão: {e}"
+        st.error(error_msg)
+        st.session_state.messages.append({"role": "assistant", "content": error_msg})
 
 # Display chat messages from history on app rerun
 for message in st.session_state.messages:
@@ -35,11 +54,12 @@ if prompt := st.chat_input("Qual é a sua pergunta?"):
     with st.chat_message("assistant"):
         with st.spinner("Pensando..."):
             try:
+                RUN_API_URL = f"{ADK_BASE_URL}/run"
                 payload = {
-                    "appName": "PredictVet",
-                    "userId": USER_ID,  # This uses the existing USER_ID = "streamlit_user"
-                    "sessionId": st.session_state.sessionId,
-                    "newMessage": {
+                    "app_name": APP_NAME,
+                    "user_id": USER_ID,
+                    "session_id": st.session_state.adk_session_id,
+                    "new_message": {
                         "parts": [
                             {
                                 "text": prompt
@@ -49,7 +69,7 @@ if prompt := st.chat_input("Qual é a sua pergunta?"):
                     },
                     "streaming": False
                 }
-                response = requests.post(API_URL, json=payload)
+                response = requests.post(RUN_API_URL, json=payload)
                 response.raise_for_status() # Raises an HTTPError for bad responses (4XX or 5XX)
                 
                 api_response = response.json()
