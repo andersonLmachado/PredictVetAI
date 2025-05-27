@@ -2,9 +2,9 @@ import streamlit as st
 
 st.set_page_config(layout="wide") # Optional: Use wide layout for more space
 
-st.title("Dados Cadastrais do Pet")
+st.title("Dados Cadastrais")
 
-st.write("Preencha as informações de seu pet abaixo. Todos os campos são de preenchimento opcional.")
+st.write("Preencha as informações do pet abaixo. Todos os campos são de preenchimento opcional.")
 
 with st.form(key="pet_registration_form"):
     st.header("Informações do Pet")
@@ -74,7 +74,7 @@ with st.form(key="pet_registration_form"):
             "Alterações de Comportamento": alteracoes_comportamento
         })
 
-st.sidebar.markdown("---")
-st.sidebar.markdown("Navegue pelas seções:")
+
+
 # The main app page (app.py) will be the default 'home' page.
 # Streamlit automatically lists pages from the 'pages' directory.
