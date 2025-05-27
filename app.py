@@ -4,7 +4,7 @@ import json
 import uuid
 
 # Application Title
-st.title("Assistente Veterinário PredictVet")
+st.title("PredictVet")
 
 # Constants
 ADK_BASE_URL = "http://localhost:8000"
@@ -72,8 +72,19 @@ if prompt := st.chat_input("Qual é a sua pergunta?"):
                 response = requests.post(RUN_API_URL, json=payload)
                 response.raise_for_status() # Raises an HTTPError for bad responses (4XX or 5XX)
                 
-                api_response = response.json()
-                assistant_response = api_response.get("output")
+                api_response_list = response.json()
+                assistant_response = None
+                
+                # Itere sobre os eventos na lista
+                for event in api_response_list:
+                    # O exemplo que você deu mostra "content" com role "model" e "parts"
+                    if "content" in event and event["content"].get("role") == "model":
+                        for part in event["content"].get("parts", []):
+                            if "text" in part:
+                                assistant_response = part["text"]
+                                break # Encontrou o texto, pode sair do loop de partes
+                        if assistant_response:
+                            break # Encontrou o texto principal, pode sair do loop de eventos
 
                 if assistant_response:
                     st.markdown(assistant_response)
