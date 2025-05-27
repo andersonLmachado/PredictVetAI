@@ -1,6 +1,7 @@
 import streamlit as st
 import requests
 import json
+import uuid
 
 # Application Title
 st.title("Assistente Veterinário PredictVet")
@@ -12,6 +13,10 @@ USER_ID = "streamlit_user"
 # Initialize chat history in session state if it doesn't exist
 if "messages" not in st.session_state:
     st.session_state.messages = []
+
+# Initialize sessionId if it doesn't exist
+if "sessionId" not in st.session_state:
+    st.session_state.sessionId = str(uuid.uuid4())
 
 # Display chat messages from history on app rerun
 for message in st.session_state.messages:
@@ -30,7 +35,20 @@ if prompt := st.chat_input("Qual é a sua pergunta?"):
     with st.chat_message("assistant"):
         with st.spinner("Pensando..."):
             try:
-                payload = {"user_id": USER_ID, "input": prompt}
+                payload = {
+                    "appName": "PredictVet",
+                    "userId": USER_ID,  # This uses the existing USER_ID = "streamlit_user"
+                    "sessionId": st.session_state.sessionId,
+                    "newMessage": {
+                        "parts": [
+                            {
+                                "text": prompt
+                            }
+                        ],
+                        "role": "user"
+                    },
+                    "streaming": False
+                }
                 response = requests.post(API_URL, json=payload)
                 response.raise_for_status() # Raises an HTTPError for bad responses (4XX or 5XX)
                 
