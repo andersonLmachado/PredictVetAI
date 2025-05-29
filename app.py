@@ -57,19 +57,37 @@ def call_agent_api(message_text):
                     content_list_to_process.extend(actual_content_data)
                 elif isinstance(actual_content_data, dict):
                     content_list_to_process.append(actual_content_data)
+                elif isinstance(actual_content_data, str): # Defensive check
+                    # If actual_content_data is a plain string and role is model (though unlikely with current ADK structure for run API)
+                    # This part might need to be adjusted if ADK sends plain string content directly for "model" role in some cases.
+                    # For now, the primary logic expects a list/dict of parts.
+                    # If the event itself has a role and it's "model", and content is string:
+                    if event.get("role") == "model": # Check role on the event itself
+                         assistant_response_text = actual_content_data
+                         break # Found text, break from event loop
+
 
                 for content_item in content_list_to_process:
                     if isinstance(content_item, dict) and content_item.get("role") == "model":
-                        for part in content_item.get("parts", []):
-                            if "text" in part:
-                                assistant_response_text = part["text"]
+                        for part_item in content_item.get("parts", []): # Renamed 'part' to 'part_item' to avoid conflict
+                            if isinstance(part_item, dict) and "text" in part_item:
+                                assistant_response_text = part_item["text"]
                                 break  # Found text in parts, break from parts loop
+                            elif isinstance(part_item, str): # If a part is just a string (less likely for ADK run)
+                                assistant_response_text = part_item
+                                break
                         if assistant_response_text:
                             break  # Found text, break from content_item loop
             
             if assistant_response_text:
                 break # Found text, break from event loop
-                
+        
+        if assistant_response_text is None:
+            # This case means the loop finished without finding model text.
+            # Could be an empty response or unexpected structure.
+            st.warning("O agente retornou uma resposta, mas não continha texto visível.")
+            return "O agente não forneceu uma resposta em texto." # Return a default message.
+
         return assistant_response_text
 
     except requests.exceptions.RequestException as e:
