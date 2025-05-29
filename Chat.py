@@ -3,6 +3,9 @@ import requests
 import json
 import uuid
 
+#Config
+st.set_page_config(page_title="PredictVet", page_icon="🐾", layout="wide", initial_sidebar_state="expanded")
+
 # Application Title
 st.title("PredictVet")
 
@@ -116,7 +119,7 @@ if "session_initialized" not in st.session_state:
         
         # Trigger initial message to get categories if no messages exist
         if not st.session_state.messages:
-            with st.spinner("Carregando categorias..."):
+            with st.spinner("Carregando..."):
                 initial_response = call_agent_api("INICIAR_FLUXO") # Or any other predefined initial message
                 if initial_response:
                     st.session_state.messages.append({"role": "assistant", "content": initial_response})
