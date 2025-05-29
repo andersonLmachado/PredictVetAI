@@ -70,47 +70,110 @@ def handle_predictvet_interaction(
     # Stage: "awaiting_category"
     if dialog_stage == "awaiting_category":
         available_categories = ListarCategorias()
-        if not available_categories or (available_categories and "Error:" in available_categories[0]):
-            agent_session_state.clear()
-            return f"Desculpe, houve um problema ao carregar as categorias: {available_categories[0] if available_categories else 'Nenhuma categoria disponível.'}. Por favor, tente iniciar a conversa novamente mais tarde."
 
-        if user_message_text and user_message_text in available_categories:
-            agent_session_state["selected_category"] = user_message_text
+        if not available_categories or (isinstance(available_categories, list) and available_categories and "Error:" in available_categories[0]):
+            # Clear sensitive state but keep dialog stage for potential retry if applicable,
+            # or reset completely if error is persistent.
+            agent_session_state["selected_category"] = None
+            # agent_session_state.clear() # Consider if a full clear is always best here
+            return f"Desculpe, houve um problema ao carregar as categorias. ({available_categories[0] if available_categories else 'Nenhuma categoria disponível.'}). Por favor, tente iniciar a conversa novamente mais tarde."
+
+        # Check if it's the initial interaction or user requests category listing
+        if not user_message_text or user_message_text == "INICIAR_FLUXO":
+            response_text = "Olá! Para começarmos, por favor, escolha uma categoria de sintomas abaixo:\n" + "\n".join([f"{i+1}. {c}" for i, c in enumerate(available_categories)])
+            return response_text
+
+        # User has provided input, try to match it
+        selected_category_name = None
+        try:
+            user_input_as_int = int(user_message_text)
+            if 1 <= user_input_as_int <= len(available_categories):
+                selected_category_name = available_categories[user_input_as_int - 1]
+        except ValueError:
+            # Not a number, try direct match (case-insensitive)
+            for cat in available_categories:
+                if user_message_text.lower() == cat.lower():
+                    selected_category_name = cat
+                    break
+        
+        if selected_category_name:
+            agent_session_state["selected_category"] = selected_category_name
             agent_session_state["dialog_stage"] = "awaiting_complaint"
-            queixas = ListarQueixasPorCategoria(categoria=user_message_text)
-            if not queixas or (queixas and "Error:" in queixas[0]):
-                agent_session_state["dialog_stage"] = "awaiting_category"
+            
+            queixas = ListarQueixasPorCategoria(categoria=selected_category_name)
+            if not queixas or (isinstance(queixas, list) and queixas and "Error:" in queixas[0]):
+                agent_session_state["dialog_stage"] = "awaiting_category" # Revert state
                 agent_session_state["selected_category"] = None
-                return f"Houve um problema ao listar as queixas para '{user_message_text}': {queixas[0] if queixas else 'Nenhuma queixa disponível.'}. Por favor, escolha uma categoria novamente."
-            return f"Entendido. Queixas comuns para '{user_message_text}':\n" + "\n".join([f"- {q}" for q in queixas]) + "\nPor favor, selecione uma queixa."
+                error_msg = queixas[0] if queixas and isinstance(queixas, list) else "Nenhuma queixa disponível."
+                # Re-list categories for the user
+                category_list_str = "\n".join([f"{i+1}. {c}" for i, c in enumerate(available_categories)])
+                return f"Houve um problema ao listar as queixas para '{selected_category_name}': {error_msg}. Por favor, escolha uma categoria novamente:\n{category_list_str}"
+
+            # Successfully got complaints
+            response_text = f"Entendido. Queixas comuns para '{selected_category_name}':\n" + \
+                            "\n".join([f"{i+1}. {q}" for i, q in enumerate(queixas)]) + \
+                            "\nPor favor, selecione uma queixa."
+            return response_text
         else:
-            return "Olá! Para começarmos, por favor, escolha uma categoria de sintomas abaixo:\n" + "\n".join([f"- {c}" for c in available_categories])
+            # Invalid input
+            response_text = "Opção inválida. Por favor, escolha uma categoria da lista:\n" + \
+                            "\n".join([f"{i+1}. {c}" for i, c in enumerate(available_categories)])
+            return response_text
 
     # Stage: "awaiting_complaint"
     elif dialog_stage == "awaiting_complaint":
         selected_category = agent_session_state.get("selected_category")
         if not selected_category:
             agent_session_state["dialog_stage"] = "awaiting_category"
-            return "Parece que nenhuma categoria foi selecionada. Por favor, escolha uma categoria primeiro."
+            # Attempt to list categories again for a smoother recovery
+            available_categories = ListarCategorias()
+            if not available_categories or (isinstance(available_categories, list) and available_categories and "Error:" in available_categories[0]):
+                return "Parece que nenhuma categoria foi selecionada e houve um problema ao recarregar as categorias. Por favor, tente reiniciar a conversa."
+            category_list_str = "\n".join([f"{i+1}. {c}" for i, c in enumerate(available_categories)])
+            return f"Parece que nenhuma categoria foi selecionada. Por favor, escolha uma categoria primeiro:\n{category_list_str}"
 
         queixas_validas = ListarQueixasPorCategoria(categoria=selected_category)
-        if not queixas_validas or (queixas_validas and "Error:" in queixas_validas[0]):
-            agent_session_state["dialog_stage"] = "awaiting_category"
+        if not queixas_validas or (isinstance(queixas_validas, list) and queixas_validas and "Error:" in queixas_validas[0]):
+            agent_session_state["dialog_stage"] = "awaiting_category" # Revert state
             agent_session_state["selected_category"] = None
-            return f"Desculpe, houve um problema ao carregar as queixas para '{selected_category}': {queixas_validas[0] if queixas_validas else 'Nenhuma queixa disponível.'}. Por favor, tente selecionar a categoria novamente."
+            error_msg = queixas_validas[0] if queixas_validas and isinstance(queixas_validas, list) else "Nenhuma queixa disponível."
+            # Re-list categories for the user
+            available_categories = ListarCategorias() # Attempt to get categories for recovery
+            if not available_categories or (isinstance(available_categories, list) and "Error:" in available_categories[0]):
+                 return f"Desculpe, houve um problema ao carregar as queixas para '{selected_category}' ({error_msg}) e também ao recarregar as categorias. Por favor, tente reiniciar a conversa."
+            category_list_str = "\n".join([f"{i+1}. {c}" for i, c in enumerate(available_categories)])
+            return f"Desculpe, houve um problema ao carregar as queixas para '{selected_category}': {error_msg}. Por favor, tente selecionar uma categoria novamente:\n{category_list_str}"
 
-        if user_message_text and user_message_text in queixas_validas:
-            agent_session_state["selected_complaint"] = user_message_text
+        selected_complaint_name = None
+        try:
+            user_input_as_int = int(user_message_text)
+            if 1 <= user_input_as_int <= len(queixas_validas):
+                selected_complaint_name = queixas_validas[user_input_as_int - 1]
+        except ValueError:
+            # Not a number, try direct match (case-insensitive)
+            for q_valida in queixas_validas:
+                if user_message_text.lower() == q_valida.lower():
+                    selected_complaint_name = q_valida
+                    break
+        
+        if selected_complaint_name:
+            agent_session_state["selected_complaint"] = selected_complaint_name
             agent_session_state["dialog_stage"] = "awaiting_specific_answer"
-            pergunta = GerarPerguntaEspecifica(queixa=user_message_text)
-            if "Error:" in pergunta:
-                 agent_session_state["dialog_stage"] = "awaiting_complaint"
+            pergunta = GerarPerguntaEspecifica(queixa=selected_complaint_name)
+            
+            if "Error:" in pergunta: # Assuming error is returned as a string starting with "Error:"
+                 agent_session_state["dialog_stage"] = "awaiting_complaint" # Revert to complaint selection
                  agent_session_state["selected_complaint"] = None
-                 return f"Houve um problema ao gerar a pergunta para '{user_message_text}': {pergunta}. Por favor, selecione a queixa novamente."
+                 # Re-list complaints for the user
+                 complaint_list_str = "\n".join([f"{i+1}. {q}" for i, q in enumerate(queixas_validas)])
+                 return f"Houve um problema ao gerar a pergunta para '{selected_complaint_name}': {pergunta}. Por favor, selecione a queixa novamente para '{selected_category}':\n{complaint_list_str}"
+            
             agent_session_state["last_question_asked"] = pergunta
             return pergunta
         else:
-            return f"Por favor, selecione uma queixa válida da lista para '{selected_category}':\n" + "\n".join([f"- {q}" for q in queixas_validas])
+            # Invalid input, re-list complaints
+            complaint_list_str = "\n".join([f"{i+1}. {q}" for i, q in enumerate(queixas_validas)])
+            return f"Opção inválida. Por favor, selecione uma queixa válida da lista para '{selected_category}':\n{complaint_list_str}"
 
     # Stage: "awaiting_specific_answer"
     elif dialog_stage == "awaiting_specific_answer":
@@ -118,35 +181,82 @@ def handle_predictvet_interaction(
         last_question = agent_session_state.get("last_question_asked")
 
         if not selected_complaint or not last_question:
+            # Critical state missing, reset to beginning
             agent_session_state["dialog_stage"] = "awaiting_category"
-            return "Ocorreu um erro no fluxo. Vamos recomeçar. Por favor, escolha uma categoria."
+            agent_session_state["selected_category"] = None
+            agent_session_state["selected_complaint"] = None
+            agent_session_state["collected_answers"] = {}
+            agent_session_state["last_question_asked"] = None
+            # Attempt to list categories again for a smoother recovery
+            available_categories = ListarCategorias()
+            if not available_categories or (isinstance(available_categories, list) and available_categories and "Error:" in available_categories[0]):
+                return "Ocorreu um erro no fluxo (faltando queixa ou pergunta) e houve um problema ao recarregar as categorias. Por favor, tente reiniciar a conversa."
+            category_list_str = "\n".join([f"{i+1}. {c}" for i, c in enumerate(available_categories)])
+            return f"Ocorreu um erro no fluxo da conversa (queixa ou pergunta anterior não encontrada). Vamos recomeçar. Por favor, escolha uma categoria:\n{category_list_str}"
         
         agent_session_state["collected_answers"][last_question] = user_message_text
         agent_session_state["dialog_stage"] = "generating_analysis"
         # Fall through to "generating_analysis"
 
     # Stage: "generating_analysis" (allow fall-through by using 'if' not 'elif')
-    if agent_session_state.get("dialog_stage") == "generating_analysis":
+    if agent_session_state.get("dialog_stage") == "generating_analysis": # Note: Intentionally 'if' to allow fall-through
         selected_complaint = agent_session_state.get("selected_complaint")
         collected_answers = agent_session_state.get("collected_answers")
 
-        if not selected_complaint:
+        if not selected_complaint: # Should have been caught earlier, but as a safeguard
             agent_session_state["dialog_stage"] = "awaiting_category"
-            return "Ocorreu um erro antes de gerar a análise. Vamos recomeçar. Por favor, escolha uma categoria."
+            agent_session_state["selected_category"] = None
+            agent_session_state["selected_complaint"] = None
+            agent_session_state["collected_answers"] = {}
+            agent_session_state["last_question_asked"] = None
+            available_categories = ListarCategorias()
+            if not available_categories or (isinstance(available_categories, list) and available_categories and "Error:" in available_categories[0]):
+                return "Ocorreu um erro antes de gerar a análise (queixa não encontrada) e houve um problema ao recarregar as categorias. Por favor, tente reiniciar a conversa."
+            category_list_str = "\n".join([f"{i+1}. {c}" for i, c in enumerate(available_categories)])
+            return f"Ocorreu um erro antes de gerar a análise (queixa não encontrada). Vamos recomeçar. Por favor, escolha uma categoria:\n{category_list_str}"
 
         prompt_final_para_llm = GerarAnaliseFinal(queixa_selecionada=selected_complaint, respostas_coletadas=collected_answers)
         
+        final_analysis_text = ""
         try:
-            # MODIFICADO: Chame o método no llm_component
+            # Assuming .run() is the correct method for LlmAgent based on common ADK patterns
+            # and the AttributeError for generate_content.
+            # The structure of final_analysis_response from .run() might also need checking.
+            # Reverting to original generate_content, assuming the issue is with mocking Pydantic model instances.
             final_analysis_response = llm_component.generate_content(prompt_final_para_llm)
-            final_analysis_text = final_analysis_response.text if hasattr(final_analysis_response, 'text') else str(final_analysis_response)
+            
+            # Ensure text extraction is robust
+            if hasattr(final_analysis_response, 'text'):
+                final_analysis_text = final_analysis_response.text
+            elif isinstance(final_analysis_response, (str, dict)): # ADK might wrap it differently
+                 # Attempt to extract text if it's a dict, or use as is if str
+                if isinstance(final_analysis_response, dict) and 'text' in final_analysis_response:
+                    final_analysis_text = final_analysis_response['text']
+                elif isinstance(final_analysis_response, str):
+                    final_analysis_text = final_analysis_response
+                else: # Fallback for unknown structure
+                    final_analysis_text = str(final_analysis_response)
+            else: # Fallback for other types
+                final_analysis_text = str(final_analysis_response)
+
+            if not final_analysis_text: # Handle cases where text extraction yields empty
+                raise ValueError("A resposta da análise final estava vazia.")
 
         except Exception as e:
-            agent_session_state.clear()
+            # Reset state before returning error to allow user to restart cleanly
             agent_session_state["dialog_stage"] = "awaiting_category"
-            return f"Desculpe, ocorreu um erro ao gerar a análise final: {e}. Vamos tentar novamente do início. Por favor, escolha uma categoria."
+            agent_session_state["selected_category"] = None
+            agent_session_state["selected_complaint"] = None
+            agent_session_state["collected_answers"] = {}
+            agent_session_state["last_question_asked"] = None
+            # Attempt to list categories again for a smoother recovery
+            available_categories = ListarCategorias()
+            if not available_categories or (isinstance(available_categories, list) and available_categories and "Error:" in available_categories[0]):
+                 return f"Desculpe, ocorreu um erro ao gerar a análise final ({e}) e também ao recarregar as categorias. Por favor, tente reiniciar a conversa."
+            category_list_str = "\n".join([f"{i+1}. {c}" for i, c in enumerate(available_categories)])
+            return f"Desculpe, ocorreu um erro ao gerar a análise final: {e}. Vamos tentar novamente do início. Por favor, escolha uma categoria:\n{category_list_str}"
 
-        # Reset for next interaction
+        # CRUCIAL: Reset state for the next conversation BEFORE returning the analysis
         agent_session_state["dialog_stage"] = "awaiting_category"
         agent_session_state["selected_category"] = None
         agent_session_state["selected_complaint"] = None
@@ -155,9 +265,18 @@ def handle_predictvet_interaction(
         
         return final_analysis_text
     
-    # Fallback if no stage is matched
+    # Fallback if no stage is matched (should ideally not be reached if logic is correct)
+    # Reset state and try to guide user back to start
     agent_session_state["dialog_stage"] = "awaiting_category"
-    return "Ocorreu um erro inesperado no fluxo da conversa. Vamos recomeçar. Por favor, escolha uma categoria."
+    agent_session_state["selected_category"] = None
+    agent_session_state["selected_complaint"] = None
+    agent_session_state["collected_answers"] = {}
+    agent_session_state["last_question_asked"] = None
+    available_categories = ListarCategorias()
+    if not available_categories or (isinstance(available_categories, list) and available_categories and "Error:" in available_categories[0]):
+        return "Ocorreu um erro inesperado no fluxo da conversa e não foi possível carregar as categorias. Por favor, tente reiniciar a conversa."
+    category_list_str = "\n".join([f"{i+1}. {c}" for i, c in enumerate(available_categories)])
+    return f"Ocorreu um erro inesperado no fluxo da conversa. Vamos recomeçar. Por favor, escolha uma categoria:\n{category_list_str}"
 
     # --- Fim da lógica de diálogo ---
 
