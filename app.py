@@ -48,15 +48,28 @@ def call_agent_api(message_text):
         api_response_list = response.json()
         assistant_response_text = None
         
-        for event in api_response_list:
-            if "content" in event and event["content"].get("role") == "model":
-                for part in event["content"].get("parts", []):
-                    if "text" in part:
-                        assistant_response_text = part["text"]
-                        break
-                if assistant_response_text:
-                    break
-        
+        for event in api_response_list: 
+            if "content" in event:
+                actual_content_data = event["content"]
+                
+                content_list_to_process = []
+                if isinstance(actual_content_data, list):
+                    content_list_to_process.extend(actual_content_data)
+                elif isinstance(actual_content_data, dict):
+                    content_list_to_process.append(actual_content_data)
+
+                for content_item in content_list_to_process:
+                    if isinstance(content_item, dict) and content_item.get("role") == "model":
+                        for part in content_item.get("parts", []):
+                            if "text" in part:
+                                assistant_response_text = part["text"]
+                                break  # Found text in parts, break from parts loop
+                        if assistant_response_text:
+                            break  # Found text, break from content_item loop
+            
+            if assistant_response_text:
+                break # Found text, break from event loop
+                
         return assistant_response_text
 
     except requests.exceptions.RequestException as e:
