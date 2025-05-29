@@ -1,5 +1,5 @@
 import pandas as pd
-from google.adk.tools import tool
+from google.adk.tools import FunctionTool
 
 # DataFrame Placeholders
 queixas_df = None
@@ -12,16 +12,28 @@ def load_dataframes():
     global queixas_df, diagnostico_df
 
     try:
-        queixas_df = pd.read_csv("PredictVet/planilha_queixas_tutor.csv")
-        diagnostico_df = pd.read_csv("PredictVet/planilha_diagnostico_exames.csv")
-        # print("Dataframes loaded successfully.") # Intentionally commented out for now
-    except FileNotFoundError:
-        # print("Error: One or both CSV files not found. Please ensure the files are in the PredictVet directory.") # Intentionally commented out
-        # Tools will handle the case where dataframes are None.
-        pass
+        # Ensure paths are correct relative to the script's execution context
+        # For example, if running from d:\PredictVetAgent, these paths should be correct.
+        queixas_path = "PredictVet/planilha_queixas_tutor.csv"
+        diagnostico_path = "PredictVet/planilha_diagnostico_exames.csv"
+        
+        print(f"Attempting to load queixas_df from: {queixas_path}")
+        queixas_df = pd.read_csv(queixas_path)
+        print(f"Attempting to load diagnostico_df from: {diagnostico_path}")
+        diagnostico_df = pd.read_csv(diagnostico_path)
+        # print("Dataframes loaded successfully.")
+    except FileNotFoundError as fnf_error:
+        print(f"Error: File not found. Please ensure the CSV files exist at the specified paths. Details: {fnf_error}")
+        # DataFrames will remain None, tools should handle this.
+    except pd.errors.EmptyDataError as ede_error:
+        print(f"Error: One or both CSV files are empty. Details: {ede_error}")
+        # DataFrames will remain None.
+    except pd.errors.ParserError as pe_error:
+        print(f"Error: Failed to parse one or both CSV files. Check for malformed data. Details: {pe_error}")
+        # DataFrames will remain None.
     except Exception as e:
-        # print(f"An error occurred while loading dataframes: {e}") # Intentionally commented out
-        pass # Tools will handle other exceptions if dataframes remain None.
+        print(f"An unexpected error occurred while loading dataframes: {e}")
+        # DataFrames will remain None.
 
 # Example of how a tool will use load_dataframes (do not implement the tool itself yet):
 # def ListarCategorias():
@@ -29,21 +41,7 @@ def load_dataframes():
 # load_dataframes()
 # # ... rest of the tool logic using queixas_df
 
-if __name__ == "__main__":
-    load_dataframes()
-    if queixas_df is not None:
-        print("\nQueixas DataFrame head:")
-        print(queixas_df.head())
-    else:
-        print("\nQueixas DataFrame is None. Check CSV file paths and integrity.")
-    if diagnostico_df is not None:
-        print("\nDiagnostico DataFrame head:")
-        print(diagnostico_df.head())
-    else:
-        print("\nDiagnostico DataFrame is None. Check CSV file paths and integrity.")
-
-
-@tool
+# Tool functions
 def ListarCategorias() -> list[str]:
     """
     Lists unique categories from the 'queixas_df' DataFrame.
@@ -66,7 +64,6 @@ def ListarCategorias() -> list[str]:
     except Exception as e:
         return [f"Error listing categories: {e}"]
 
-@tool
 def ListarQueixasPorCategoria(categoria: str) -> list[str]:
     """
     Lists unique complaints for a given category from the 'queixas_df' DataFrame.
@@ -93,7 +90,6 @@ def ListarQueixasPorCategoria(categoria: str) -> list[str]:
     except Exception as e:
         return [f"Error listing queixas for category {categoria}: {e}"]
 
-@tool
 def GerarPerguntaEspecifica(queixa: str) -> str:
     """
     Generates a specific question for a given complaint from the 'queixas_df' DataFrame.
@@ -117,11 +113,11 @@ def GerarPerguntaEspecifica(queixa: str) -> str:
         pergunta_row = queixas_df[queixas_df['Queixa'] == queixa]
         if pergunta_row.empty:
             return f"No specific question found for queixa: {queixa}"
-        return pergunta_row['Pergunta_Especifica'].iloc[0]
+        # Ensure it returns a string, not a Series/DataFrame element if only one.
+        return str(pergunta_row['Pergunta_Especifica'].iloc[0]) 
     except Exception as e:
         return f"Error generating specific question for queixa {queixa}: {e}"
 
-@tool
 def ProcessarRespostaPergunta(queixa: str, pergunta_feita: str, resposta_usuario: str) -> dict:
     """
     Processes the user's response to a specific question.
@@ -135,7 +131,6 @@ def ProcessarRespostaPergunta(queixa: str, pergunta_feita: str, resposta_usuario
         "status": "resposta_registrada_aguardando_analise"
     }
 
-@tool
 def GerarAnaliseFinal(queixa_selecionada: str, respostas_coletadas: dict) -> str:
     """
     Generates a final analysis prompt for the LLM based on the selected complaint and collected answers.
@@ -150,8 +145,13 @@ def GerarAnaliseFinal(queixa_selecionada: str, respostas_coletadas: dict) -> str
     persona = "Você é um assistente veterinário especializado em ajudar médicos veterinários no momento do atendimento de cães e gatos. Você deve fornecer informações precisas e úteis sobre sintomas, tratamentos e cuidados gerais. Seja carinhoso, atencioso e profissional em suas respostas."
     
     respostas_formatadas = ""
-    for pergunta, resposta in respostas_coletadas.items():
-        respostas_formatadas += f"Pergunta: {pergunta}, Resposta: {resposta}\n"
+    if isinstance(respostas_coletadas, dict):
+        for pergunta, resposta in respostas_coletadas.items():
+            respostas_formatadas += f"Pergunta: {pergunta}, Resposta: {resposta}\n"
+    else:
+        # Handle case where respostas_coletadas might not be a dict as expected
+        respostas_formatadas = "Respostas coletadas não estão no formato esperado.\n"
+
 
     contexto_diagnostico_str = "Informação de diagnóstico específica para esta queixa não disponível."
     diagnostico_possivel = "N/A"
@@ -160,25 +160,71 @@ def GerarAnaliseFinal(queixa_selecionada: str, respostas_coletadas: dict) -> str
 
     if diagnostico_df is not None:
         if 'Queixa' not in diagnostico_df.columns:
-            # This case should ideally not happen if CSV is correct.
-            # The prompt will proceed with "Informação de diagnóstico específica... não disponível."
             pass 
         else:
             diagnostico_info = diagnostico_df[diagnostico_df['Queixa'] == queixa_selecionada]
             if not diagnostico_info.empty:
                 diagnostico_row = diagnostico_info.iloc[0]
-                # Check if columns exist before trying to access them
-                diagnostico_possivel = diagnostico_row['Diagnostico_Possivel'] if 'Diagnostico_Possivel' in diagnostico_row else "N/A"
-                exames_sugeridos = diagnostico_row['Exames_Sugeridos'] if 'Exames_Sugeridos' in diagnostico_row else "N/A"
-                procedimentos_adicionais = diagnostico_row['Procedimentos_Adicionais'] if 'Procedimentos_Adicionais' in diagnostico_row else "N/A"
+                diagnostico_possivel = diagnostico_row.get('Diagnostico_Possivel', "N/A")
+                exames_sugeridos = diagnostico_row.get('Exames_Sugeridos', "N/A")
+                procedimentos_adicionais = diagnostico_row.get('Procedimentos_Adicionais', "N/A")
                 
                 contexto_diagnostico_str = f"Diagnóstico Possível: {diagnostico_possivel}\nExames Sugeridos: {exames_sugeridos}\nProcedimentos Adicionais: {procedimentos_adicionais}"
-            # If diagnostico_info is empty, contexto_diagnostico_str remains as "Informação de diagnóstico específica... não disponível."
     
-    # If diagnostico_df is None, the prompt will also use the default "Informação de diagnóstico específica... não disponível."
-
     instrucao_llm = "Com base nas informações fornecidas, gere uma análise detalhada para o médico veterinário apresentar ao tutor, incluindo possíveis diagnósticos, exames recomendados e próximos passos."
 
     prompt_final = f"{persona}\n\nQueixa Principal: {queixa_selecionada}\n\nRespostas Coletadas:\n{respostas_formatadas}\nContexto do Diagnóstico:\n{contexto_diagnostico_str}\n\nInstrução:\n{instrucao_llm}"
     
     return prompt_final
+
+# Create FunctionTool instances
+listar_categorias_tool = FunctionTool(func=ListarCategorias)
+listar_queixas_por_categoria_tool = FunctionTool(func=ListarQueixasPorCategoria)
+gerar_pergunta_especifica_tool = FunctionTool(func=GerarPerguntaEspecifica)
+processar_resposta_pergunta_tool = FunctionTool(func=ProcessarRespostaPergunta)
+gerar_analise_final_tool = FunctionTool(func=GerarAnaliseFinal)
+
+# List of all tools to be imported by the agent
+all_tools = [
+    listar_categorias_tool,
+    listar_queixas_por_categoria_tool,
+    gerar_pergunta_especifica_tool,
+    processar_resposta_pergunta_tool,
+    gerar_analise_final_tool,
+]
+
+if __name__ == "__main__":
+    load_dataframes()
+    if queixas_df is not None:
+        print("\nQueixas DataFrame head:")
+        print(queixas_df.head())
+        # Test ListarCategorias
+        print("\nTestando ListarCategorias:")
+        print(ListarCategorias())
+        # Test ListarQueixasPorCategoria (example category)
+        if not queixas_df.empty and 'Categoria' in queixas_df.columns:
+            example_category = queixas_df['Categoria'].iloc[0]
+            print(f"\nTestando ListarQueixasPorCategoria para '{example_category}':")
+            print(ListarQueixasPorCategoria(categoria=example_category))
+        # Test GerarPerguntaEspecifica (example queixa)
+        if not queixas_df.empty and 'Queixa' in queixas_df.columns:
+            example_queixa = queixas_df['Queixa'].iloc[0]
+            print(f"\nTestando GerarPerguntaEspecifica para '{example_queixa}':")
+            print(GerarPerguntaEspecifica(queixa=example_queixa))
+
+    else:
+        print("\nQueixas DataFrame is None. Check CSV file paths and integrity.")
+    
+    if diagnostico_df is not None:
+        print("\nDiagnostico DataFrame head:")
+        print(diagnostico_df.head())
+        # Test GerarAnaliseFinal (example)
+        print("\nTestando GerarAnaliseFinal (exemplo):")
+        print(GerarAnaliseFinal(queixa_selecionada="Vômito", respostas_coletadas={"Cor do vômito?": "Amarelo"}))
+
+    else:
+        print("\nDiagnostico DataFrame is None. Check CSV file paths and integrity.")
+
+    # Test ProcessarRespostaPergunta
+    print("\nTestando ProcessarRespostaPergunta:")
+    print(ProcessarRespostaPergunta(queixa="Dermatite", pergunta_feita="Há lesões na pele?", resposta_usuario="Sim, vermelhidão e coceira."))
