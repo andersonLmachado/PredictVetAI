@@ -1,0 +1,8 @@
+﻿Queixa,Sintoma_Chave,Diagnostico_Possivel,Exames_Sugeridos,Procedimentos_Adicionais
+Vômito,Diarreia,Gastroenterite Aguda,Exame de fezes,Hemograma, Hidratação, dieta leve
+Vômito,Frequência diária,Corpo Estranho Gastrointestinal,Radiografia abdominal, Ultrassonografia, Cirurgia (se confirmado)
+Diarreia,Com sangue/muco,Colite Infecciosa,Exame parasitológico de fezes, Cultura bacteriana de fezes, Antibióticos, anti-inflamatórios
+Tosse,Seca e noturna,Bronquite Crônica,Radiografia torácica, Broncoscopia, Medicamentos broncodilatadores
+Espirro,Secreção amarela/verde,Infecção Respiratória Alta,Citologia nasal, Cultura bacteriana, Antibióticos
+Dificuldade para urinar,Esforço/dor,Obstrução Urinária,Urinálise, Radiografia abdominal, Cateterismo uretral de emergência
+Coceira,Lesões vermelhas,Dermatite Alérgica,Raspado de pele, Culturas fúngicas/bacterianas, Antialérgicos, banhos terapêuticos

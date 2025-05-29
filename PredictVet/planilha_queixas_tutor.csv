@@ -1,0 +1,17 @@
+﻿Categoria,Queixa,Pergunta_Especifica
+Gastrointestinal,Vômito,O vômito é acompanhado de diarreia?
+Gastrointestinal,Vômito,Com que frequência o animal vomita?
+Gastrointestinal,Diarreia,A diarreia é líquida ou pastosa?
+Gastrointestinal,Diarreia,Há sangue ou muco nas fezes?
+Respiratório,Tosse,A tosse é seca ou com catarro?
+Respiratório,Tosse,Quando a tosse ocorre com mais frequência (manhã, noite, após exercícios)?
+Respiratório,Espirro,O espirro é acompanhado de secreção nasal? Qual a cor?
+Respiratório,Dificuldade para respirar,O animal está ofegante mesmo em repouso?
+Pele e Pelos,Coceira,Onde no corpo a coceira é mais intensa?
+Pele e Pelos,Coceira,Há lesões na pele, como vermelhidão, feridas ou crostas?
+Pele e Pelos,Queda de pelo,A queda de pelo é localizada ou generalizada?
+Urinário,Dificuldade para urinar,O animal demonstra dor ou esforço ao tentar urinar?
+Urinário,Dificuldade para urinar,Ele está urinando em pequenas quantidades e com frequência?
+Oftalmológico,Secreção nos olhos,Qual a cor e consistência da secreção?
+Comportamental,Agressividade,A agressividade é direcionada a pessoas, outros animais ou objetos?
+Comportamental,Agressividade,Quando esse comportamento começou?
