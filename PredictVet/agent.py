@@ -26,7 +26,7 @@ llm_component = LlmAgent(
     model="gemini-2.0-flash-exp",
     name="PredictVetLLMComponent",
     description="Componente LLM para o PredictVet, responsável pela geração de texto.",
-    instruction="Você é um assistente veterinário especializado em ajudar médicos veterinários no momento do atendimento de cães e gatos.",
+    instruction="Você é um assistente veterinário especializado em ajudar médicos veterinários no momento do atendimento de cães e gatos. Sempre responda em português brasileiro (PT-BR).",
     tools=all_tools
 )
 
@@ -50,7 +50,6 @@ def handle_predictvet_interaction(
     agent_session_state.setdefault("selected_complaint", None)
     agent_session_state.setdefault("collected_answers", {})
     agent_session_state.setdefault("last_question_asked", None)
-    agent_session_state.setdefault("current_step", "initial") # Ensure current_step is always initialized
 
     user_message_text = ""
     # Parse new_message
@@ -226,9 +225,21 @@ Digite o **número** ou o **nome exato** da queixa."""
 
         # Armazena a resposta
         agent_session_state["collected_answers"][last_question] = user_message_text
-        agent_session_state["current_step"] = "confirm_analysis" # Transition to confirm_analysis
+        
+        # MUDANÇA AQUI: Vai direto para confirmação da análise, não gera imediatamente
+        agent_session_state["current_step"] = "confirm_analysis"
 
-        return "Ok, já temos algumas informações. Deseja que eu faça a análise final agora? (Sim/Não)"
+        return f"""✅ **Informação registrada com sucesso!**
+
+**Resumo da consulta:**
+• **Categoria:** {agent_session_state.get("selected_category")}
+• **Queixa:** {selected_complaint}
+• **Pergunta:** {last_question}
+• **Resposta:** {user_message_text}
+
+Agora posso gerar uma análise completa com recomendações técnicas baseadas nessas informações.
+
+**Deseja que eu prossiga com a análise final?** (Digite **"sim"** para continuar ou **"não"** se quiser adicionar mais informações)"""
 
     # --- CONFIRMAR ANÁLISE ---
     elif current_step == "confirm_analysis":
@@ -237,12 +248,12 @@ Digite o **número** ou o **nome exato** da queixa."""
 
         if not selected_complaint or not collected_answers:
             agent_session_state["current_step"] = "initial"
-            return "❌ Erro no fluxo (confirm_analysis). Digite 'INICIAR' para recomeçar."
+            return "❌ Erro no fluxo. Digite 'INICIAR' para recomeçar."
 
         # Normalize user input
         normalized_input = user_message_text.lower().strip()
 
-        if normalized_input in ["sim", "s", "claro", "pode", "yes", "y"]:
+        if normalized_input in ["sim", "s", "claro", "pode", "yes", "y", "ok", "prosseguir", "continuar"]:
             # Gera análise final
             prompt_final_para_llm = GerarAnaliseFinal(queixa_selecionada=selected_complaint, respostas_coletadas=collected_answers)
 
@@ -259,7 +270,9 @@ Digite o **número** ou o **nome exato** da queixa."""
                 agent_session_state["available_categories"] = []
                 agent_session_state["available_complaints"] = []
 
-                return f"""🔍 **Análise Completa para: {selected_complaint}**
+                return f"""🔍 **Análise Veterinária Completa**
+
+**Caso:** {selected_complaint}
 
 {final_analysis_text}
 
@@ -277,17 +290,22 @@ Digite o **número** ou o **nome exato** da queixa."""
                 agent_session_state["available_complaints"] = []
                 return f"❌ Erro ao gerar a análise final: {e}. Digite 'INICIAR' para tentar novamente."
 
-        elif normalized_input in ["não", "n", "ainda não", "nao", "no"]:
-            # Mantém o estado para adicionar mais informações (ou poderia ir para um novo estado 'add_more_info')
-            # agent_session_state["current_step"] = "confirm_analysis" # ou "add_more_info"
-            return "Ok. Gostaria de adicionar mais alguma informação ou detalhe? (Por enquanto, apenas responda para eu saber que você quer adicionar mais. A funcionalidade de adicionar mais informações será implementada no futuro)"
-            # Para esta tarefa, é suficiente apenas perguntar. A lógica de processar a informação adicional
-            # pode ser uma melhoria futura. Se o usuário disser não, ele pode apenas dizer "sim" para a pergunta anterior
-            # para prosseguir com a análise com as informações já coletadas.
+        elif normalized_input in ["não", "n", "ainda não", "nao", "no", "adicionar", "mais"]:
+            # Volta para permitir adicionar mais informações
+            agent_session_state["current_step"] = "answer_question"
+            return """📝 **Perfeito!** Você pode adicionar mais informações sobre o caso.
+
+Por favor, forneça detalhes adicionais que considere relevantes para a análise (sintomas adicionais, histórico, comportamento do animal, etc.):"""
 
         else:
             # Resposta não clara
-            return "Não entendi sua resposta. Por favor, diga 'sim' para iniciar a análise final ou 'não' para adicionar mais informações."
+            return """❓ **Não entendi sua resposta.**
+
+Por favor, responda:
+• **"sim"** - para prosseguir com a análise final
+• **"não"** - para adicionar mais informações ao caso
+
+Digite sua escolha:"""
 
     # --- FALLBACK ---
     else:
