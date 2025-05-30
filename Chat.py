@@ -164,23 +164,17 @@ if prompt := st.chat_input("Qual é a sua pergunta?"):
                 st.session_state.messages.append({"role": "assistant", "content": assistant_response_text})
                 
                 # Update interaction type based on keywords in response (simplified)
-                # This is a basic way to infer state; agent could send structured state if needed.
-                if "Olá! Para começarmos, por favor, escolha uma categoria de sintomas abaixo:" in assistant_response_text or \
-                   "Por favor, escolha uma categoria novamente." in assistant_response_text or \
-                   "Vamos recomeçar. Por favor, escolha uma categoria." in assistant_response_text:
+                if "Olá! Eu sou o PredictVet" in assistant_response_text or \
+                   "Digite 'INICIAR' para recomeçar" in assistant_response_text or \
+                   "Digite 'INICIAR' para começar uma nova consulta" in assistant_response_text:
                     st.session_state.current_interaction_type = "show_categories"
-                elif "Entendido. Queixas comuns para" in assistant_response_text and "Por favor, selecione uma queixa." in assistant_response_text:
+                elif "Ótimo! Você selecionou:" in assistant_response_text and "escolha a queixa específica" in assistant_response_text:
                     st.session_state.current_interaction_type = "show_complaints"
-                elif "No specific question found for queixa:" not in assistant_response_text and \
-                     "Error:" not in assistant_response_text and \
-                     ("?" in assistant_response_text and not assistant_response_text.startswith("Entendido. Queixas comuns para")): # Heuristic for a question
+                elif "Queixa selecionada:" in assistant_response_text and "preciso de uma informação adicional:" in assistant_response_text:
                     st.session_state.current_interaction_type = "show_question"
-                    st.session_state.current_question = assistant_response_text # Store the question
-                else: # Could be final analysis or an error message from the agent not fitting other categories.
-                    st.session_state.current_interaction_type = "show_analysis" 
-                    # If it's an analysis, the agent should have reset its internal state.
-                    # If the user types again, it should trigger the "awaiting_category" stage in the agent.
-
+                else:
+                    st.session_state.current_interaction_type = "show_analysis"
+                
             else:
                 # Error messages are already handled and added to chat by call_agent_api
                 # but ensure something is displayed if null response for other reasons.
