@@ -1,5 +1,7 @@
 import pandas as pd
 from google.adk.tools import FunctionTool
+import os
+import traceback
 
 # DataFrame Placeholders
 queixas_df = None
@@ -10,6 +12,7 @@ def load_dataframes():
     Loads the dataframes from the CSV files.
     """
     global queixas_df, diagnostico_df
+    print(f"Current Working Directory: {os.getcwd()}")
 
     try:
         # Ensure paths are correct relative to the script's execution context
@@ -17,13 +20,26 @@ def load_dataframes():
         queixas_path = "PredictVet/planilha_queixas_tutor.csv"
         diagnostico_path = "PredictVet/planilha_diagnostico_exames.csv"
         
-        print(f"Attempting to load queixas_df from: {queixas_path}")
+        print(f"Attempting to load queixas_df from absolute path: {os.path.abspath(queixas_path)}")
         queixas_df = pd.read_csv(queixas_path)
-        print(f"Attempting to load diagnostico_df from: {diagnostico_path}")
+        print("Successfully loaded queixas_df.")
+        print("queixas_df.head():")
+        print(queixas_df.head())
+        print("queixas_df.info():")
+        queixas_df.info()
+        print("queixas_df['Categoria'].unique():")
+        print(queixas_df['Categoria'].unique())
+
+        print(f"Attempting to load diagnostico_df from absolute path: {os.path.abspath(diagnostico_path)}")
         diagnostico_df = pd.read_csv(diagnostico_path)
+        print("Successfully loaded diagnostico_df.")
+        print("diagnostico_df.head():")
+        print(diagnostico_df.head())
+        print("diagnostico_df.info():")
+        diagnostico_df.info()
         # print("Dataframes loaded successfully.")
     except FileNotFoundError as fnf_error:
-        print(f"Error: File not found. Please ensure the CSV files exist at the specified paths. Details: {fnf_error}")
+        print(f"Error: File not found. Absolute path checked: {os.path.abspath(queixas_path if 'queixas_path' in locals() else diagnostico_path)}. Details: {fnf_error}")
         # DataFrames will remain None, tools should handle this.
     except pd.errors.EmptyDataError as ede_error:
         print(f"Error: One or both CSV files are empty. Details: {ede_error}")
@@ -33,6 +49,7 @@ def load_dataframes():
         # DataFrames will remain None.
     except Exception as e:
         print(f"An unexpected error occurred while loading dataframes: {e}")
+        print(f"Full traceback: {traceback.format_exc()}")
         # DataFrames will remain None.
 
 # Example of how a tool will use load_dataframes (do not implement the tool itself yet):
@@ -54,14 +71,19 @@ def ListarCategorias() -> list[str]:
         load_dataframes()
 
     if queixas_df is None:
+        print("ListarCategorias: queixas_df is None or not loaded.")
         return ["Error: Queixas DataFrame not loaded. Cannot list categories."]
     
     if 'Categoria' not in queixas_df.columns:
+        print("ListarCategorias: 'Categoria' column missing.")
         return ["Error: 'Categoria' column missing from Queixas DataFrame."]
 
     try:
-        return queixas_df['Categoria'].unique().tolist()
+        categories = queixas_df['Categoria'].unique().tolist()
+        print(f"ListarCategorias: Returning categories: {categories}")
+        return categories
     except Exception as e:
+        print(f"ListarCategorias: Error: {e}")
         return [f"Error listing categories: {e}"]
 
 def ListarQueixasPorCategoria(categoria: str) -> list[str]:
@@ -77,17 +99,23 @@ def ListarQueixasPorCategoria(categoria: str) -> list[str]:
         load_dataframes()
 
     if queixas_df is None:
+        print("ListarQueixasPorCategoria: queixas_df is None or not loaded.")
         return ["Error: Queixas DataFrame not loaded. Cannot list queixas."]
 
     if 'Categoria' not in queixas_df.columns or 'Queixa' not in queixas_df.columns:
+        print("ListarQueixasPorCategoria: Required columns missing.")
         return ["Error: Required columns ('Categoria' or 'Queixa') missing from Queixas DataFrame."]
 
     try:
         filtered_queixas = queixas_df[queixas_df['Categoria'] == categoria]
         if filtered_queixas.empty:
+            print(f"ListarQueixasPorCategoria: No queixas found for category: {categoria}")
             return [f"No queixas found for category: {categoria}"]
-        return filtered_queixas['Queixa'].unique().tolist()
+        queixas_list = filtered_queixas['Queixa'].unique().tolist()
+        print(f"ListarQueixasPorCategoria: Returning queixas: {queixas_list} for category: {categoria}")
+        return queixas_list
     except Exception as e:
+        print(f"ListarQueixasPorCategoria: Error for category {categoria}: {e}")
         return [f"Error listing queixas for category {categoria}: {e}"]
 
 def GerarPerguntaEspecifica(queixa: str) -> str:
