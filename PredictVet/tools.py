@@ -202,7 +202,7 @@ def GerarAnaliseFinal(queixa_selecionada: str, respostas_coletadas: dict) -> str
     instrucao_llm = "Com base nas informações fornecidas, gere uma análise detalhada para o médico veterinário apresentar ao tutor, incluindo possíveis diagnósticos, exames recomendados e próximos passos."
 
     prompt_final = f"{persona}\n\nQueixa Principal: {queixa_selecionada}\n\nRespostas Coletadas:\n{respostas_formatadas}\nContexto do Diagnóstico:\n{contexto_diagnostico_str}\n\nInstrução:\n{instrucao_llm}"
-    
+    print(f"GerarAnaliseFinal Tool: Constructed prompt for LLM: {prompt_final}")
     return prompt_final
 
 # Create FunctionTool instances

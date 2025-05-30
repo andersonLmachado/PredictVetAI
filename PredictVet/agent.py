@@ -66,6 +66,7 @@ def handle_predictvet_interaction(
     if current_step == "initial" or user_message_text.upper() in ["INICIAR_FLUXO", "INICIAR", "COMEÇAR"]:
         # Carrega categorias e apresenta mensagem de boas-vindas com lista
         available_categories = ListarCategorias()
+        print(f"Agent: ListarCategorias returned: {available_categories}")
         
         if not available_categories or (available_categories and "Error:" in available_categories[0]):
             agent_session_state.clear()
@@ -79,6 +80,7 @@ def handle_predictvet_interaction(
         # Atualiza o estado
         agent_session_state["current_step"] = "choose_category"
         agent_session_state["available_categories"] = available_categories
+        print(f"Agent: Formatted categories_list for display: \n{categories_list}")
 
         return f"""🐾 **Olá! Eu sou o PredictVet**, seu assistente veterinário especializado.
 
@@ -96,6 +98,7 @@ Você pode digitar o **número** ou o **nome da categoria**."""
         # Se não temos as categorias em cache, recarrega
         if not available_categories:
             available_categories = ListarCategorias()
+            print(f"Agent: ListarCategorias (re-fetch) returned: {available_categories}")
             agent_session_state["available_categories"] = available_categories
         
         if not available_categories or "Error:" in available_categories[0]:
@@ -119,6 +122,7 @@ Você pode digitar o **número** ou o **nome da categoria**."""
         if selected_category_name:
             # Carrega queixas para a categoria selecionada
             queixas = ListarQueixasPorCategoria(categoria=selected_category_name)
+            print(f"Agent: ListarQueixasPorCategoria returned for '{selected_category_name}': {queixas}")
             
             if not queixas or (queixas and "Error:" in queixas[0]):
                 return f"❌ Houve um problema ao listar as queixas para '{selected_category_name}': {queixas[0] if queixas else 'Nenhuma queixa disponível.'}. Por favor, escolha uma categoria novamente."
@@ -132,6 +136,7 @@ Você pode digitar o **número** ou o **nome da categoria**."""
             agent_session_state["selected_category"] = selected_category_name
             agent_session_state["current_step"] = "choose_complaint"
             agent_session_state["available_complaints"] = queixas
+            print(f"Agent: Formatted queixas_list for display: \n{queixas_list}")
 
             return f"""✅ **Ótimo! Você selecionou: {selected_category_name}**
 
@@ -145,6 +150,7 @@ Você pode digitar o **número** ou o **nome da queixa**."""
             categories_list = ""
             for i, categoria in enumerate(available_categories, 1):
                 categories_list += f"{i}. {categoria}\n"
+            print(f"Agent: Re-displaying formatted categories_list due to invalid input: \n{categories_list}")
             
             return f"""❌ **Categoria não reconhecida.** Por favor, escolha uma das opções abaixo:
 
@@ -163,6 +169,7 @@ Digite o **número** ou o **nome exato** da categoria."""
         # Se não temos as queixas em cache, recarrega
         if not available_complaints:
             available_complaints = ListarQueixasPorCategoria(categoria=selected_category)
+            print(f"Agent: ListarQueixasPorCategoria (re-fetch) returned for '{selected_category}': {available_complaints}")
             agent_session_state["available_complaints"] = available_complaints
 
         if not available_complaints or "Error:" in available_complaints[0]:
@@ -186,6 +193,7 @@ Digite o **número** ou o **nome exato** da categoria."""
         if selected_complaint_name:
             # Gera pergunta específica
             pergunta = GerarPerguntaEspecifica(queixa=selected_complaint_name)
+            print(f"Agent: GerarPerguntaEspecifica returned for '{selected_complaint_name}': {pergunta}")
             
             if "Error:" in pergunta:
                 return f"❌ Houve um problema ao gerar a pergunta para '{selected_complaint_name}': {pergunta}. Por favor, selecione a queixa novamente."
@@ -194,6 +202,7 @@ Digite o **número** ou o **nome exato** da categoria."""
             agent_session_state["selected_complaint"] = selected_complaint_name
             agent_session_state["current_step"] = "answer_question"
             agent_session_state["last_question_asked"] = pergunta
+            print(f"Agent: Displaying specific question: {pergunta}")
 
             return f"""📋 **Queixa selecionada: {selected_complaint_name}**
 
@@ -208,6 +217,7 @@ Por favor, forneça sua resposta com o máximo de detalhes possível."""
             queixas_list = ""
             for i, queixa in enumerate(available_complaints, 1):
                 queixas_list += f"{i}. {queixa}\n"
+            print(f"Agent: Re-displaying formatted queixas_list due to invalid input: \n{queixas_list}")
             
             return f"""❌ **Queixa não reconhecida.** Por favor, escolha uma das opções para **{selected_category}**:
 
@@ -256,10 +266,13 @@ Agora posso gerar uma análise completa com recomendações técnicas baseadas n
         if normalized_input in ["sim", "s", "claro", "pode", "yes", "y", "ok", "prosseguir", "continuar"]:
             # Gera análise final
             prompt_final_para_llm = GerarAnaliseFinal(queixa_selecionada=selected_complaint, respostas_coletadas=collected_answers)
+            print(f"Agent: GerarAnaliseFinal tool returned prompt: {prompt_final_para_llm}")
 
             try:
                 final_analysis_response = llm_component.generate_content(prompt_final_para_llm)
+                print(f"Agent: LLM (Gemini) raw response object: {final_analysis_response}")
                 final_analysis_text = final_analysis_response.text if hasattr(final_analysis_response, 'text') else str(final_analysis_response)
+                print(f"Agent: Extracted LLM analysis text: {final_analysis_text}")
 
                 # Reset para próxima interação
                 agent_session_state["current_step"] = "initial"
@@ -270,7 +283,7 @@ Agora posso gerar uma análise completa com recomendações técnicas baseadas n
                 agent_session_state["available_categories"] = []
                 agent_session_state["available_complaints"] = []
 
-                return f"""🔍 **Análise Veterinária Completa**
+                message_to_return = f"""🔍 **Análise Veterinária Completa**
 
 **Caso:** {selected_complaint}
 
@@ -278,6 +291,8 @@ Agora posso gerar uma análise completa com recomendações técnicas baseadas n
 
 ---
 💡 **Para uma nova consulta, digite 'INICIAR' ou envie uma nova mensagem.**"""
+                print(f"Agent: Final message string being returned to Streamlit (with analysis): \n{message_to_return}")
+                return message_to_return
 
             except Exception as e:
                 # Reset state even on error during generation
@@ -312,6 +327,5 @@ Digite sua escolha:"""
         agent_session_state["current_step"] = "initial"
         return "❌ Estado inesperado. Digite 'INICIAR' para começar uma nova consulta."
 
-# 3. Use diretamente o LlmAgent como root_agent
+# 3. Use directamente o LlmAgent como root_agent
 root_agent = llm_component
-
