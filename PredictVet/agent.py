@@ -50,6 +50,7 @@ def handle_predictvet_interaction(
     agent_session_state.setdefault("selected_complaint", None)
     agent_session_state.setdefault("collected_answers", {})
     agent_session_state.setdefault("last_question_asked", None)
+    agent_session_state.setdefault("current_step", "initial") # Ensure current_step is always initialized
 
     user_message_text = ""
     # Parse new_message
@@ -69,7 +70,7 @@ def handle_predictvet_interaction(
         
         if not available_categories or (available_categories and "Error:" in available_categories[0]):
             agent_session_state.clear()
-            return f"❌ Desculpe, houve um problema ao carregar as categorias: {available_categories[0] if available_categories else 'Nenhuma categoria disponível.'}. Por favor, tente novamente mais tarde."
+            return f"❌ Desculpe, ocorreu um problema ao carregar as categorias: {available_categories[0] if available_categories else 'Nenhuma categoria disponível.'}. Por favor, tente novamente mais tarde."
 
         # Formata a lista de categorias numerada
         categories_list = ""
@@ -100,7 +101,7 @@ Você pode digitar o **número** ou o **nome da categoria**."""
         
         if not available_categories or "Error:" in available_categories[0]:
             agent_session_state["current_step"] = "initial"
-            return "❌ Erro ao carregar categorias. Digite 'INICIAR' para tentar novamente."
+            return "❌ Erro ao carregar as categorias. Por favor, digite 'INICIAR' para tentar novamente."
 
         selected_category_name = None
         
@@ -121,7 +122,7 @@ Você pode digitar o **número** ou o **nome da categoria**."""
             queixas = ListarQueixasPorCategoria(categoria=selected_category_name)
             
             if not queixas or (queixas and "Error:" in queixas[0]):
-                return f"❌ Houve um problema ao listar as queixas para '{selected_category_name}': {queixas[0] if queixas else 'Nenhuma queixa disponível.'}. Por favor, escolha uma categoria novamente."
+                return f"❌ Ocorreu um problema ao listar as queixas para '{selected_category_name}': {queixas[0] if queixas else 'Nenhuma queixa disponível.'}. Por favor, escolha uma categoria novamente."
 
             # Formata a lista de queixas numerada
             queixas_list = ""
@@ -158,7 +159,7 @@ Digite o **número** ou o **nome exato** da categoria."""
 
         if not selected_category:
             agent_session_state["current_step"] = "initial"
-            return "❌ Erro no fluxo. Digite 'INICIAR' para recomeçar."
+            return "❌ Ocorreu um erro no sistema. Por favor, digite 'INICIAR' para recomeçar."
 
         # Se não temos as queixas em cache, recarrega
         if not available_complaints:
@@ -167,7 +168,7 @@ Digite o **número** ou o **nome exato** da categoria."""
 
         if not available_complaints or "Error:" in available_complaints[0]:
             agent_session_state["current_step"] = "choose_category"
-            return f"❌ Erro ao carregar queixas para '{selected_category}'. Por favor, escolha a categoria novamente."
+            return f"❌ Erro ao carregar as queixas para '{selected_category}'. Por favor, escolha a categoria novamente."
 
         selected_complaint_name = None
 
@@ -188,7 +189,7 @@ Digite o **número** ou o **nome exato** da categoria."""
             pergunta = GerarPerguntaEspecifica(queixa=selected_complaint_name)
             
             if "Error:" in pergunta:
-                return f"❌ Houve um problema ao gerar a pergunta para '{selected_complaint_name}': {pergunta}. Por favor, selecione a queixa novamente."
+                return f"❌ Ocorreu um problema ao gerar a pergunta para '{selected_complaint_name}': {pergunta}. Por favor, selecione a queixa novamente."
 
             # Atualiza o estado
             agent_session_state["selected_complaint"] = selected_complaint_name
@@ -221,44 +222,77 @@ Digite o **número** ou o **nome exato** da queixa."""
 
         if not selected_complaint or not last_question:
             agent_session_state["current_step"] = "initial"
-            return "❌ Erro no fluxo. Digite 'INICIAR' para recomeçar."
+            return "❌ Ocorreu um erro no sistema. Por favor, digite 'INICIAR' para recomeçar."
 
         # Armazena a resposta
         agent_session_state["collected_answers"][last_question] = user_message_text
-        agent_session_state["current_step"] = "generating_analysis"
+        agent_session_state["current_step"] = "confirm_analysis" # Transition to confirm_analysis
 
-        # Gera análise final
+        return "Pronto! Já coletei algumas informações. Deseja prosseguir com a análise final agora? (Sim/Não)"
+
+    # --- CONFIRMAR ANÁLISE ---
+    elif current_step == "confirm_analysis":
+        selected_complaint = agent_session_state.get("selected_complaint")
         collected_answers = agent_session_state.get("collected_answers")
-        prompt_final_para_llm = GerarAnaliseFinal(queixa_selecionada=selected_complaint, respostas_coletadas=collected_answers)
-        
-        try:
-            final_analysis_response = llm_component.generate_content(prompt_final_para_llm)
-            final_analysis_text = final_analysis_response.text if hasattr(final_analysis_response, 'text') else str(final_analysis_response)
 
-            # Reset para próxima interação
+        if not selected_complaint or not collected_answers:
             agent_session_state["current_step"] = "initial"
-            agent_session_state["selected_category"] = None
-            agent_session_state["selected_complaint"] = None
-            agent_session_state["collected_answers"] = {}
-            agent_session_state["last_question_asked"] = None
-            agent_session_state["available_categories"] = []
-            agent_session_state["available_complaints"] = []
+            return "❌ Ocorreu um erro no sistema durante a confirmação da análise. Por favor, digite 'INICIAR' para recomeçar."
 
-            return f"""🔍 **Análise Completa para: {selected_complaint}**
+        # Normalize user input
+        normalized_input = user_message_text.lower().strip()
+
+        if normalized_input in ["sim", "s", "claro", "pode", "yes", "y"]:
+            # Gera análise final
+            prompt_final_para_llm = GerarAnaliseFinal(queixa_selecionada=selected_complaint, respostas_coletadas=collected_answers)
+
+            try:
+                final_analysis_response = llm_component.generate_content(prompt_final_para_llm)
+                final_analysis_text = final_analysis_response.text if hasattr(final_analysis_response, 'text') else str(final_analysis_response)
+
+                # Reset para próxima interação
+                agent_session_state["current_step"] = "initial"
+                agent_session_state["selected_category"] = None
+                agent_session_state["selected_complaint"] = None
+                agent_session_state["collected_answers"] = {}
+                agent_session_state["last_question_asked"] = None
+                agent_session_state["available_categories"] = []
+                agent_session_state["available_complaints"] = []
+
+                return f"""🔍 **Análise Completa para: {selected_complaint}**
 
 {final_analysis_text}
 
 ---
 💡 **Para uma nova consulta, digite 'INICIAR' ou envie uma nova mensagem.**"""
 
-        except Exception as e:
-            agent_session_state["current_step"] = "initial"
-            return f"❌ Erro ao gerar a análise final: {e}. Digite 'INICIAR' para tentar novamente."
+            except Exception as e:
+                # Reset state even on error during generation
+                agent_session_state["current_step"] = "initial"
+                agent_session_state["selected_category"] = None
+                agent_session_state["selected_complaint"] = None
+                agent_session_state["collected_answers"] = {}
+                agent_session_state["last_question_asked"] = None
+                agent_session_state["available_categories"] = []
+                agent_session_state["available_complaints"] = []
+                return f"❌ Erro ao gerar a análise final: {e}. Digite 'INICIAR' para tentar novamente."
+
+        elif normalized_input in ["não", "n", "ainda não", "nao", "no"]:
+            # Mantém o estado para adicionar mais informações (ou poderia ir para um novo estado 'add_more_info')
+            # agent_session_state["current_step"] = "confirm_analysis" # ou "add_more_info"
+            return "Ok. Gostaria de adicionar alguma informação ou detalhe antes de prosseguirmos? (No momento, apenas me diga se gostaria de adicionar algo. A capacidade de processar informações adicionais será incluída no futuro.)"
+            # Para esta tarefa, é suficiente apenas perguntar. A lógica de processar a informação adicional
+            # pode ser uma melhoria futura. Se o usuário disser não, ele pode apenas dizer "sim" para a pergunta anterior
+            # para prosseguir com a análise com as informações já coletadas.
+
+        else:
+            # Resposta não clara
+            return "Não compreendi sua resposta. Por favor, responda 'sim' para iniciarmos a análise final ou 'não' se desejar adicionar mais informações."
 
     # --- FALLBACK ---
     else:
         agent_session_state["current_step"] = "initial"
-        return "❌ Estado inesperado. Digite 'INICIAR' para começar uma nova consulta."
+        return "❌ Ocorreu uma situação inesperada. Por favor, digite 'INICIAR' para começar uma nova consulta."
 
 # 3. Use diretamente o LlmAgent como root_agent
 root_agent = llm_component
